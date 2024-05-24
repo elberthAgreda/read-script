@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitorear Logs</title>
+</head>
+<body>
+    <h1>Monitorear Logs en Tiempo Real</h1>
+    <pre id="log-output"></pre>
+
+    <script>
+        const logOutput = document.getElementById('log-output');
+        const socket = new WebSocket('ws://localhost:8080');
+
+        socket.addEventListener('open', () => {
+            console.log('Conectado al servidor WebSocket');
+        });
+
+        socket.addEventListener('message', (event) => {
+            logOutput.textContent = event.data;
+        });
+
+        socket.addEventListener('close', () => {
+            console.log('Conexión cerrada');
+        });
+
+        socket.addEventListener('error', (error) => {
+            console.error('Error en la conexión WebSocket', error);
+        });
+    </script>
+</body>
+</html>
