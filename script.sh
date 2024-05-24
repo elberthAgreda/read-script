@@ -1,6 +1,8 @@
 #!/bin/bash
-echo "Iniciando script..." >> script.log
-sleep 2
-echo "Proceso en progreso..." >> script.log
-sleep 2
-echo "Script terminado." >> script.log
+
+# Create logs with timestamps
+for i in {1..10}
+do
+    echo "Log entry $i - $(date)"
+    sleep 1
+done

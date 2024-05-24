@@ -1,66 +1,72 @@
 const express = require('express');
-const { exec } = require('child_process');
-const chokidar = require('chokidar');
-const WebSocket = require('ws');
+const { spawn } = require('child_process');
+const http = require('http');
 const fs = require('fs');
+const socketIo = require('socket.io');
 
 const app = express();
-const port = 3000;
-const logFile = 'script.log';
+const server = http.createServer(app);
+const io = socketIo(server);
 
-// Ejecuta el script Bash y redirige la salida a un archivo de log
-exec('bash script.sh > script.log 2>&1', (error, stdout, stderr) => {
-    if (error) {
-        console.error(`Error ejecutando el script: ${error}`);
-        return;
-    }
-    if (stderr) {
-        console.error(`Error en stderr: ${stderr}`);
-        return;
-    }
-    console.log(`Script ejecutado y log guardado en ${logFile}`);
-});
+let scriptRunning = false; // Variable para rastrear si el script está en ejecución
 
-// Configura el servidor WebSocket
-const wss = new WebSocket.Server({ port: 8080 });
-
-wss.on('connection', (ws) => {
-    console.log('Cliente conectado');
-    ws.send('Conexión establecida. Escuchando cambios en el log...');
-
-    // Envía el contenido inicial del archivo de log
-    fs.readFile(logFile, 'utf8', (err, data) => {
-        if (err) {
-            console.error(`Error leyendo el archivo de log: ${err}`);
-            ws.send(`Error leyendo el archivo de log: ${err}`);
-            return;
-        }
-        ws.send(data);
-    });
-});
-
-// Observa cambios en el archivo de log
-chokidar.watch(logFile).on('change', (path) => {
-    console.log(`Archivo de log cambiado: ${path}`);
-    fs.readFile(logFile, 'utf8', (err, data) => {
-        if (err) {
-            console.error(`Error leyendo el archivo de log: ${err}`);
-            return;
-        }
-        // Envía el nuevo contenido del log a todos los clientes conectados
-        wss.clients.forEach((client) => {
-            if (client.readyState === WebSocket.OPEN) {
-                client.send(data);
-            }
-        });
-    });
-});
-
-// Inicia el servidor Express
 app.get('/', (req, res) => {
-    res.send('Servidor funcionando. Escuchando cambios en el log.');
+    res.sendFile(__dirname + '/index.html');
 });
 
-app.listen(port, () => {
-    console.log(`Servidor escuchando en http://localhost:${port}`);
+io.on('connection', (socket) => {
+    console.log('A client connected');
+    
+    // Notificar a los clientes sobre el estado del script
+    socket.emit('script-status', scriptRunning);
+
+    socket.on('run-script', () => {
+        if (!scriptRunning) {
+            scriptRunning = true;
+            const scriptProcess = spawn('bash', ['script.sh']);
+
+            scriptProcess.stdout.on('data', (data) => {
+                const logs = data.toString();
+                socket.emit('log', logs);
+                // Write logs to a file (optional, for debugging or logging purposes)
+                fs.appendFile('logs.txt', logs, err => {
+                    if (err) {
+                        console.error(`Error writing logs file: ${err}`);
+                        return;
+                    }
+                    console.log('Logs appended to logs.txt');
+                });
+            });
+
+            scriptProcess.stderr.on('data', (data) => {
+                console.error(`stderr: ${data}`);
+            });
+
+            scriptProcess.on('close', (code) => {
+                console.log(`Script process exited with code ${code}`);
+                scriptRunning = false;
+                // Limpiar logs al finalizar el script
+                fs.truncate('logs.txt', 0, (err) => {
+                    if (err) {
+                        console.error(`Error truncating logs file: ${err}`);
+                        return;
+                    }
+                    console.log('Logs file truncated');
+                });
+                // Notificar a todos los clientes sobre el estado actual del script
+                io.emit('script-status', scriptRunning);
+            });
+        } else {
+            socket.emit('script-in-use');
+        }
+    });
+
+    socket.on('disconnect', () => {
+        console.log('A client disconnected');
+    });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });

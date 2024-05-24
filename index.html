@@ -1,32 +1,53 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitorear Logs</title>
+    <title>Scripts automation CHO</title>
+    <style>
+        div#log-container {
+            background: black;
+            color: green;
+            padding: 30px;
+            margin-top: 20px;
+            font-family: monospace;
+            line-height: 0.5;
+            border-radius: 4px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Monitorear Logs en Tiempo Real</h1>
-    <pre id="log-output"></pre>
+    <h1>Scripts automation CHO</h1>
+    <button id="run-script">Run Script</button>
+    <button id="clean-logs">Clean Logs</button>
+    <div id="log-container"></div>
 
+    <script src="https://cdn.socket.io/4.2.0/socket.io.min.js"></script>
     <script>
-        const logOutput = document.getElementById('log-output');
-        const socket = new WebSocket('ws://localhost:8080');
+        const socket = io();
+        const logContainer = document.getElementById('log-container');
 
-        socket.addEventListener('open', () => {
-            console.log('Conectado al servidor WebSocket');
+        document.getElementById('run-script').addEventListener('click', function() {
+            socket.emit('run-script');
         });
 
-        socket.addEventListener('message', (event) => {
-            logOutput.textContent = event.data;
+        document.getElementById('clean-logs').addEventListener('click', function() {
+            logContainer.innerHTML = '';
         });
 
-        socket.addEventListener('close', () => {
-            console.log('Conexión cerrada');
+        socket.on('log', function(data) {
+            logContainer.innerHTML += `<p>${data}</p>`;
+            logContainer.scrollTop = logContainer.scrollHeight;
         });
 
-        socket.addEventListener('error', (error) => {
-            console.error('Error en la conexión WebSocket', error);
+        socket.on('script-status', function(scriptRunning) {
+            if (scriptRunning) {
+                alert('El script ya está en ejecución');
+            }
+        });
+
+        socket.on('script-in-use', function() {
+            alert('El script está siendo utilizado por otro cliente');
         });
     </script>
 </body>
